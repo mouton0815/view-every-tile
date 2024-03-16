@@ -7,7 +7,7 @@ const defaultCenter: Coords = [51.335793, 12.371988]
 // Constants controlling the map view and tile generation
 const tileZoom = 14 // VeloViewer and others use zoom-level 14 tiles
 const mapZoom = 10
-const addDelay = 200 // Delay between adding two random tiles
+const addDelay = 300 // Delay between adding two random tiles
 
 type TileContainerProps = {
     tiles: TileSet
@@ -66,8 +66,12 @@ export const App = () => {
                 }
                 while ((response = await fetch('http://localhost:5555/next')).ok) {
                     const coords: Array<Coords> = await response.json()
-                    setTileSet(tileSet.addCoords(coords).clone())
-                    await timer(addDelay)
+                    const prevSize = tileSet.getSize()
+                    const newTileSet = tileSet.addCoords(coords).clone()
+                    if (newTileSet.getSize() > prevSize) { // Some tracks may not add new tiles
+                        setTileSet(newTileSet)
+                        await timer(addDelay)
+                    }
                 }
             } catch (error) {
                 console.error(`Download error: ${error}`);
