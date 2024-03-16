@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Circle, MapContainer, Polyline, Rectangle, TileLayer } from 'react-leaflet'
-import { coords2tile, cluster2boundaries, cluster2square, tiles2clusters, Coords, TileSet } from 'tiles-math'
+import { MapContainer, Polyline, Rectangle, TileLayer } from 'react-leaflet'
+import { cluster2boundaries, cluster2square, tiles2clusters, Coords, TileSet } from 'tiles-math'
+
+const defaultCenter: Coords = [51.335793, 12.371988]
 
 // Constants controlling the map view and tile generation
 const tileZoom = 14 // VeloViewer and others use zoom-level 14 tiles
-const edgeSize = 12 // Edge length of the map area to be filled with random tiles (should be an even number
-const addDelay = 100 // Delay between adding two random tiles
-const areaCenter : Coords = [51.476, -0.008]
+const mapZoom = 10
+const addDelay = 200 // Delay between adding two random tiles
 
 type TileContainerProps = {
     tiles: TileSet
@@ -18,7 +19,6 @@ const TileContainer = ({ tiles }: TileContainerProps) => {
     const { detachedTiles, minorClusters, maxCluster } = tiles2clusters(tiles)
     const maxSquare = cluster2square(maxCluster).getCenterSquare()
     const boundaries = cluster2boundaries(maxCluster)
-    const centroid = maxCluster.centroid()
     return (
         <div>
             <>
@@ -46,42 +46,38 @@ const TileContainer = ({ tiles }: TileContainerProps) => {
                     <Rectangle bounds={maxSquare.bounds()} pane={'markerPane'} pathOptions={{ fill: false, color: 'yellow', weight: 3, opacity: 1 }} />
                 }
             </>
-            <>
-                {centroid &&
-                    <Circle center={centroid.position()} pane={'markerPane'} radius={200} pathOptions={{ color: 'orange', weight: 3, opacity: 1 }} />
-                }
-            </>
         </div>
     )
 }
 
-const defaultCenter : Coords = [51.483, -0.008]
-
 export const App = () => {
-    const centerTile = coords2tile(areaCenter, tileZoom)
-    const leftBorder = centerTile.x - edgeSize / 2
-    const upperBorder = centerTile.y - edgeSize / 2
-    const mapZoom = tileZoom - Math.ceil(edgeSize / 12) - 1
-    const areaSize = edgeSize * edgeSize
-
-    const initTileSet = new TileSet(tileZoom).addTile(centerTile)
+    const initTileSet = new TileSet(tileZoom)
     const [tileSet, setTileSet] = useState<TileSet>(initTileSet)
 
+    const mapCenter = tileSet.centroid()?.position() || defaultCenter
+
     useEffect(() => {
-        // Call useEffect repeatedly to add more random tiles
         const timer = (ms: number) => new Promise(res => setTimeout(res, ms));
         (async function() {
-            while (tileSet.getSize() < areaSize) {
-                const tileNo = { x: leftBorder + randomInt(edgeSize), y: upperBorder + randomInt(edgeSize) }
-                setTileSet(tileSet.addTile(tileNo).clone())
-                await timer(addDelay)
+            try {
+                let response = await fetch('http://localhost:5555/init')
+                if (!response.ok) {
+                    return
+                }
+                while ((response = await fetch('http://localhost:5555/next')).ok) {
+                    const coords: Array<Coords> = await response.json()
+                    setTileSet(tileSet.addCoords(coords).clone())
+                    await timer(addDelay)
+                }
+            } catch (error) {
+                console.error(`Download error: ${error}`);
             }
         })()
     }, [])
 
     return (
         <MapContainer
-            center={defaultCenter}
+            center={mapCenter}
             zoom={mapZoom}
             scrollWheelZoom={true}
             style={{ height: '100vh', minWidth: '100vw' }}>
@@ -92,8 +88,4 @@ export const App = () => {
             <TileContainer tiles={tileSet} />
         </MapContainer>
     )
-}
-
-function randomInt(max: number): number {
-    return Math.floor(Math.random() * max);
 }

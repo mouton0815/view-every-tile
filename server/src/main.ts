@@ -1,9 +1,15 @@
 import express from 'express'
+import cors from 'cors'
 import { resolve } from 'path'
 import { readdir } from 'fs/promises'
+import GpxParser from 'gpxparser'
+import fs from 'node:fs/promises'
+
+const port = 5555
 
 const app = express()
-const port = 5555
+app.use(cors())
+
 
 let fileIterator : AsyncGenerator<string, void, undefined>
 
@@ -19,10 +25,23 @@ app.get('/next', async (req, res) => {
         return
     }
     const entry = await fileIterator.next()
-    if (entry.done) {
+    if (entry.done || !entry.value) {
+        res.sendStatus(404)
+        return
+    }
+    try {
+        const data = await fs.readFile(entry.value);
+        const gpx = new GpxParser()
+        gpx.parse(data.toString())
+        if (!gpx.tracks || gpx.tracks.length !== 1 || !gpx.tracks[0].points) {
+            throw new Error('No tracks array')
+        }
+        const coords = gpx.tracks[0].points.map(({lat, lon}) => ([lat, lon]))
+        res.send(coords)
+    } catch (err) {
+        console.warn('Cannot read GPX file', entry.value, err)
         res.sendStatus(404)
     }
-    res.send(entry.value)
 })
 
 async function* getFiles(dir: string): AsyncGenerator<string, void, undefined> {
