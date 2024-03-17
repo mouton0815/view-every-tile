@@ -13,7 +13,10 @@ app.use(cors())
 
 let fileIterator : AsyncGenerator<string, void, undefined>
 
+// let counter = 0
+
 app.get('/init', async (req, res) => {
+    // counter = 0
     fileIterator = getFiles('/Users/torsten/git/strava-activity-downloader/data')
     res.sendStatus(204)
 })
@@ -24,6 +27,13 @@ app.get('/next', async (req, res) => {
         res.sendStatus(400)
         return
     }
+    /*
+    if (++counter >= 100) {
+        console.warn('Counter')
+        res.sendStatus(400)
+        return
+    }
+    */
     const entry = await fileIterator.next()
     if (entry.done || !entry.value) {
         res.sendStatus(404)

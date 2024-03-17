@@ -1,20 +1,30 @@
 import { useEffect, useState } from 'react'
 import { MapContainer, Polyline, Rectangle, TileLayer, useMap } from 'react-leaflet'
-import { cluster2boundaries, cluster2square, tiles2clusters, Coords, TileSet, TileRectangle } from 'tiles-math'
+import {
+    cluster2boundaries,
+    cluster2square,
+    tiles2clusters,
+    Coords,
+    TileSet,
+    TileRectangle,
+    TileClusters
+} from 'tiles-math'
 
 // Constants controlling the map view and tile generation
 const tileZoom = 14 // VeloViewer and others use zoom-level 14 tiles
 const mapZoom = 9
 const addDelay = 200 // Delay between adding two random tiles
 
+type Clusters = TileClusters & { allTiles: TileSet }
+
 type TileContainerProps = {
-    tiles: TileSet
+    clusters: Clusters
 }
 
 // Displays detached tiles (red), minor clusters (purple), max cluster (blue), boundaries lines of
 // the max cluster (blue), and the centroid of the max cluster (orange).
-const TileContainer = ({ tiles }: TileContainerProps) => {
-    const { detachedTiles, minorClusters, maxCluster } = tiles2clusters(tiles)
+const TileContainer = ({ clusters }: TileContainerProps) => {
+    const { detachedTiles, minorClusters, maxCluster } = clusters
     const maxSquare = cluster2square(maxCluster).getCenterSquare()
     const boundaries = cluster2boundaries(maxCluster)
     return (
@@ -48,31 +58,31 @@ const TileContainer = ({ tiles }: TileContainerProps) => {
     )
 }
 
-const MyComponent = ({ tiles }: TileContainerProps) => {
+const MyComponent = ({ clusters }: TileContainerProps) => {
     const map = useMap()
     //console.log('map center:', map.getCenter())
 
-    const { maxCluster} = tiles2clusters(tiles)
     let x1 = Number.MAX_SAFE_INTEGER
     let y1 = Number.MAX_SAFE_INTEGER
     let x2 = Number.MIN_SAFE_INTEGER
     let y2 = Number.MIN_SAFE_INTEGER
-    for (const tile of maxCluster) {
+    for (const tile of clusters.maxCluster) {
         x1 = Math.min(x1, tile.x)
         y1 = Math.min(y1, tile.y)
         x2 = Math.max(x2, tile.x + 1)
         y2 = Math.max(y2, tile.y + 1)
     }
     const mapBounds = TileRectangle.of(x1, y1, x2 - x1 + 1, y2 - y1 + 1, tileZoom)
-    console.log('----->', mapBounds)
+    // console.log('----->', mapBounds)
     map.fitBounds(mapBounds.bounds())
 
     return null
 }
 
 export const App = () => {
-    const initTileSet = new TileSet(tileZoom)
-    const [tileSet, setTileSet] = useState<TileSet>(initTileSet)
+    const emptyTileSet = new TileSet(tileZoom)
+    const initClusters : Clusters = { allTiles: emptyTileSet, detachedTiles: emptyTileSet, minorClusters: emptyTileSet, maxCluster: emptyTileSet }
+    const [clusters, setClusters] = useState<Clusters>(initClusters)
 
     useEffect(() => {
         const timer = (ms: number) => new Promise(res => setTimeout(res, ms));
@@ -84,10 +94,14 @@ export const App = () => {
                 }
                 while ((response = await fetch('http://localhost:5555/next')).ok) {
                     const coords: Array<Coords> = await response.json()
-                    const prevSize = tileSet.getSize()
-                    const newTileSet = tileSet.addCoords(coords).clone()
-                    if (newTileSet.getSize() > prevSize) { // Some tracks may not add new tiles
-                        setTileSet(newTileSet)
+                    //console.log('----->', coords)
+                    const prevSize = clusters.maxCluster.getSize()
+                    const allTiles = clusters.allTiles.clone().addCoords(coords)
+                    const newClusters = tiles2clusters(allTiles)
+                    if (newClusters.maxCluster.getSize() > prevSize) { // Some tracks may not add new tiles
+                        // console.log('----->', prevSize, newClusters.maxCluster.getSize(), allTiles.getSize())
+                        setClusters({ allTiles, ...newClusters })
+                        //setClusters({ allTiles, detachedTiles: newClusters.detachedTiles, minorClusters: newClusters.minorClusters, maxCluster: newClusters.maxCluster })
                         await timer(addDelay)
                     }
                 }
@@ -97,11 +111,11 @@ export const App = () => {
         })()
     }, [])
 
-    if (tileSet.getSize() === 0) {
+    if (clusters.maxCluster.getSize() === 0) {
         return <b>Waiting for data from server...</b>
     }
 
-    const mapCenter = tileSet.centroid()?.position() || [0, 0]
+    const mapCenter = clusters.maxCluster.centroid()?.position() || [0, 0]
 
     return (
         <MapContainer
@@ -113,8 +127,8 @@ export const App = () => {
                 attribution='&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            <MyComponent tiles={tileSet} />
-            <TileContainer tiles={tileSet} />
+            <MyComponent clusters={clusters} />
+            <TileContainer clusters={clusters} />
         </MapContainer>
     )
 }
