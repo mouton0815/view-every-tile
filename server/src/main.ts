@@ -34,10 +34,12 @@ app.get('/next', async (req, res) => {
         const gpx = new GpxParser()
         gpx.parse(data.toString())
         if (!gpx.tracks || gpx.tracks.length !== 1 || !gpx.tracks[0].points) {
-            throw new Error('No tracks array')
+            console.warn('No tracks array in file', entry.value)
+            res.send([])
+        } else {
+            const coords = gpx.tracks[0].points.map(({lat, lon}) => ([lat, lon]))
+            res.send(coords)
         }
-        const coords = gpx.tracks[0].points.map(({lat, lon}) => ([lat, lon]))
-        res.send(coords)
     } catch (err) {
         console.warn('Cannot read GPX file', entry.value, err)
         res.sendStatus(404)
