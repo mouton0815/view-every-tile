@@ -69,8 +69,8 @@ const MyComponent = ({ clusters }: TileContainerProps) => {
     for (const tile of clusters.maxCluster) {
         x1 = Math.min(x1, tile.x)
         y1 = Math.min(y1, tile.y)
-        x2 = Math.max(x2, tile.x + 1)
-        y2 = Math.max(y2, tile.y + 1)
+        x2 = Math.max(x2, tile.x)
+        y2 = Math.max(y2, tile.y)
     }
     const mapBounds = TileRectangle.of(x1, y1, x2 - x1 + 1, y2 - y1 + 1, tileZoom)
     // console.log('----->', mapBounds)
@@ -95,13 +95,13 @@ export const App = () => {
                 while ((response = await fetch('http://localhost:5555/next')).ok) {
                     const coords: Array<Coords> = await response.json()
                     //console.log('----->', coords)
-                    const prevSize = clusters.maxCluster.getSize()
+                    const prevAllSize = clusters.allTiles.getSize()
                     const allTiles = clusters.allTiles.clone().addCoords(coords)
-                    const newClusters = tiles2clusters(allTiles)
-                    if (newClusters.maxCluster.getSize() > prevSize) { // Some tracks may not add new tiles
+                    if (allTiles.getSize() > prevAllSize) { // Some tracks may not add new tiles
+                        const newClusters = tiles2clusters(allTiles)
                         // console.log('----->', prevSize, newClusters.maxCluster.getSize(), allTiles.getSize())
                         setClusters({ allTiles, ...newClusters })
-                        //setClusters({ allTiles, detachedTiles: newClusters.detachedTiles, minorClusters: newClusters.minorClusters, maxCluster: newClusters.maxCluster })
+                        console.log('-----> DELAY')
                         await timer(addDelay)
                     }
                 }
@@ -121,6 +121,7 @@ export const App = () => {
         <MapContainer
             center={mapCenter}
             zoom={mapZoom}
+            zoomSnap={0.1}
             scrollWheelZoom={true}
             style={{ height: '100vh', minWidth: '100vw' }}>
             <TileLayer
