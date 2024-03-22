@@ -6,7 +6,6 @@ import {
     tiles2clusters,
     Coords,
     TileSet,
-    TileRectangle,
     TileClusters
 } from 'tiles-math'
 
@@ -58,22 +57,10 @@ const TileContainer = ({ clusters }: TileContainerProps) => {
 
 const MyComponent = ({ clusters }: TileContainerProps) => {
     const map = useMap()
-    //console.log('map center:', map.getCenter())
-
-    let x1 = Number.MAX_SAFE_INTEGER
-    let y1 = Number.MAX_SAFE_INTEGER
-    let x2 = Number.MIN_SAFE_INTEGER
-    let y2 = Number.MIN_SAFE_INTEGER
-    for (const tile of clusters.maxCluster) {
-        x1 = Math.min(x1, tile.x)
-        y1 = Math.min(y1, tile.y)
-        x2 = Math.max(x2, tile.x)
-        y2 = Math.max(y2, tile.y)
+    const mapBounds = clusters.maxCluster.boundingBox(0.5)
+    if (mapBounds) {
+        map.fitBounds(mapBounds.bounds())
     }
-    const mapBounds = TileRectangle.of(x1, y1, x2 - x1 + 1, y2 - y1 + 1, tileZoom)
-    // console.log('----->', mapBounds)
-    map.fitBounds(mapBounds.bounds())
-
     return null
 }
 
