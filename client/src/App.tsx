@@ -15,17 +15,15 @@ const tileZoom = 14 // VeloViewer and others use zoom-level 14 tiles
 const mapZoom = 9
 const addDelay = 200 // Delay between adding two random tiles
 
-type Clusters = TileClusters & { allTiles: TileSet }
-
 type TileContainerProps = {
-    clusters: Clusters
+    clusters: TileClusters
 }
 
 // Displays detached tiles (red), minor clusters (purple), max cluster (blue), boundaries lines of
 // the max cluster (blue), and the centroid of the max cluster (orange).
 const TileContainer = ({ clusters }: TileContainerProps) => {
-    const { detachedTiles, minorClusters, maxCluster } = clusters
-    const maxSquare = cluster2square(maxCluster).getCenterSquare()
+    const { allTiles, detachedTiles, minorClusters, maxCluster } = clusters
+    const maxSquare = cluster2square(allTiles).getCenterSquare()
     const boundaries = cluster2boundaries(maxCluster)
     return (
         <div>
@@ -81,8 +79,8 @@ const MyComponent = ({ clusters }: TileContainerProps) => {
 
 export const App = () => {
     const emptyTileSet = new TileSet(tileZoom)
-    const initClusters : Clusters = { allTiles: emptyTileSet, detachedTiles: emptyTileSet, minorClusters: emptyTileSet, maxCluster: emptyTileSet }
-    const [clusters, setClusters] = useState<Clusters>(initClusters)
+    const initClusters = { allTiles: emptyTileSet, detachedTiles: emptyTileSet, minorClusters: emptyTileSet, maxCluster: emptyTileSet }
+    const [clusters, setClusters] = useState<TileClusters>(initClusters)
 
     useEffect(() => {
         const timer = (ms: number) => new Promise(res => setTimeout(res, ms));
@@ -100,7 +98,7 @@ export const App = () => {
                     if (allTiles.getSize() > prevAllSize) { // Some tracks may not add new tiles
                         const newClusters = tiles2clusters(allTiles)
                         // console.log('----->', prevSize, newClusters.maxCluster.getSize(), allTiles.getSize())
-                        setClusters({ allTiles, ...newClusters })
+                        setClusters(newClusters)
                         console.log('-----> DELAY')
                         await timer(addDelay)
                     }
