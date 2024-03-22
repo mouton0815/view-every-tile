@@ -2,7 +2,7 @@
   "name": "view-every-tile-server",
   "version": "1.0.0",
   "description": "Delivers all GPX files of a folder",
-  "main": "src/main.ts",
+  "main": "src/server.ts",
   "scripts": {
     "start": "tsc && node dist/main.js"
   },
