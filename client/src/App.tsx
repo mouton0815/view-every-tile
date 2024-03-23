@@ -1,55 +1,48 @@
 import { useEffect, useState } from 'react'
 import { MapContainer, Polyline, Rectangle, TileLayer, useMap } from 'react-leaflet'
-import { Bounds, Coords } from 'tiles-math'
+import { cluster2boundaries, cluster2square, TileClusters, tiles2clusters, TileSet } from 'tiles-math'
+import { TileNo } from 'tiles-math/dist/types/TileNo'
 
 // Constants controlling the map view and tile generation
+const tileZoom = 14 // VeloViewer and others use zoom-level 14 tiles
 const mapZoom = 9
-const addDelay = 2000 // Delay between adding two random tiles
-
-type TileStuff = {
-    all: Array<Bounds>
-    det: Array<Bounds>
-    min: Array<Bounds>
-    max: Array<Bounds>
-    cen: Coords
-    bnd: Array<Array<Coords>>
-    box: Bounds
-    sqr: Bounds
-}
+const addDelay = 500 // Delay between adding two random tiles
 
 type TileContainerProps = {
-    clusters: TileStuff
+    clusters: TileClusters
 }
 
 // Displays detached tiles (red), minor clusters (purple), max cluster (blue), boundaries lines of
 // the max cluster (blue), and the centroid of the max cluster (orange).
 const TileContainer = ({ clusters }: TileContainerProps) => {
-    const { det, min, max, bnd, sqr } = clusters
+    const { allTiles, detachedTiles, minorClusters, maxCluster } = clusters
+    const maxSquare = cluster2square(allTiles).getCenterSquare()
+    const boundaries = cluster2boundaries(maxCluster)
     return (
         <div>
             <>
-                {det.map((bounds, index) => (
-                    <Rectangle key={index} bounds={bounds} pathOptions={{ color: 'red', weight: 0.5, opacity: 0.5 }} />
+                {detachedTiles.map((tile, index) => (
+                    <Rectangle key={index} bounds={tile.bounds()} pathOptions={{ color: 'red', weight: 0.5, opacity: 0.5 }} />
                 ))}
             </>
             <>
-                {min.map((bounds, index) => (
-                    <Rectangle key={index} bounds={bounds} pathOptions={{ color: 'purple', weight: 1, opacity: 1 }} />
+                {minorClusters.map((tile, index) => (
+                    <Rectangle key={index} bounds={tile.bounds()} pathOptions={{ color: 'purple', weight: 1, opacity: 1 }} />
                 ))}
             </>
             <>
-                {max.map((bounds, index) => (
-                    <Rectangle key={index} bounds={bounds} pathOptions={{ color: 'blue', weight: 0.5, opacity: 0.5 }} />
+                {maxCluster.map((tile, index) => (
+                    <Rectangle key={index} bounds={tile.bounds()} pathOptions={{ color: 'blue', weight: 0.5, opacity: 0.5 }} />
                 ))}
             </>
             <>
-                {bnd.map((line, index) => (
-                    <Polyline key={index} positions={line} pathOptions={{ color: 'blue', weight: 2, opacity: 1 }} />
+                {boundaries.map((line, index) => (
+                    <Polyline key={index} positions={line.positions()} pathOptions={{ color: 'blue', weight: 2, opacity: 1 }} />
                 ))}
             </>
             <>
-                {sqr &&
-                    <Rectangle bounds={sqr} pane={'markerPane'} pathOptions={{ fill: false, color: 'yellow', weight: 3, opacity: 1 }} />
+                {maxSquare &&
+                    <Rectangle bounds={maxSquare.bounds()} pane={'markerPane'} pathOptions={{ fill: false, color: 'yellow', weight: 3, opacity: 1 }} />
                 }
             </>
         </div>
@@ -57,13 +50,15 @@ const TileContainer = ({ clusters }: TileContainerProps) => {
 }
 
 const MyComponent = ({ clusters }: TileContainerProps) => {
-    const map = useMap()
-    map.fitBounds(clusters.box)
+    const mapBounds = clusters.maxCluster.boundingBox(0.5)
+    if (mapBounds) {
+        useMap().fitBounds(mapBounds.bounds())
+    }
     return null
 }
 
 export const App = () => {
-    const [clusters, setClusters] = useState<TileStuff | null>(null)
+    const [clusters, setClusters] = useState<TileClusters | null>(null)
 
     useEffect(() => {
         const timer = (ms: number) => new Promise(res => setTimeout(res, ms));
@@ -74,9 +69,10 @@ export const App = () => {
                     return
                 }
                 while ((response = await fetch('http://localhost:5555/next')).ok) {
-                    const newClusters: TileStuff = await response.json()
-                    //console.log('----->', coords)
-                    setClusters(newClusters)
+                    const tiles : Array<TileNo> = await response.json()
+                    const tileSet = new TileSet(tileZoom).addTiles(tiles)
+                    const clusters = tiles2clusters(tileSet)
+                    setClusters(clusters)
                     await timer(addDelay)
                 }
             } catch (error) {
@@ -89,9 +85,10 @@ export const App = () => {
         return <b>Waiting for data from server...</b>
     }
 
+    const mapCenter = clusters.maxCluster.centroid()?.position()
     return (
         <MapContainer
-            center={clusters.cen}
+            center={mapCenter}
             zoom={mapZoom}
             zoomSnap={0.1}
             scrollWheelZoom={true}

@@ -1,7 +1,7 @@
 import { dirname, resolve } from 'path'
 import fs from 'node:fs/promises'
 import GpxParser from 'gpxparser'
-import { Bounds, Coords, TileClusters, cluster2square, tiles2clusters, TileSet, cluster2boundaries } from 'tiles-math'
+import { Coords, TileClusters, tiles2clusters, TileSet } from 'tiles-math'
 
 const ZOOM = 14
 
@@ -33,34 +33,15 @@ async function parseFile(file: string) : Promise<Array<Coords>> {
     }
 }
 
-/*
-function tileMath(coords: Array<Coords>): TileClusters {
-    const tiles = new TileSet(14).addCoords(coords)
-    return tiles2clusters(tiles)
-}
-*/
-
 function createFileName(inFilePath: string): string {
     const parts = inFilePath.split('/')
     return process.cwd() + '/data/' + parts.toSpliced(0, parts.length - 3).join('/')
 }
 
-function toBounds(tiles: TileSet): Array<Bounds> {
-    return tiles.toArray().map(tile => tile.bounds())
-}
-
-async function writeFile(outFilePath: string, { allTiles, detachedTiles, minorClusters, maxCluster }: TileClusters) {
+async function writeFile(outFilePath: string, tiles: TileSet) {
     await fs.mkdir(dirname(outFilePath), { recursive: true })
-    const all = toBounds(allTiles)
-    const det = toBounds(detachedTiles)
-    const min = toBounds(minorClusters)
-    const max = toBounds(maxCluster)
-    const cen = maxCluster.centroid().position()
-    const bnd = cluster2boundaries(maxCluster).map(line => line.positions())
-    const box = maxCluster.boundingBox(0).bounds()
-    const sqr = cluster2square(allTiles).getCenterSquare().bounds()
-    const data = JSON.stringify({ all, det, min, max, cen, bnd, sqr, box })
-    await fs.writeFile(outFilePath, data)
+    const data = tiles.map(({ x, y }) => ({ x, y }))
+    await fs.writeFile(outFilePath, JSON.stringify(data))
     console.log('--o-->', outFilePath)
 }
 
@@ -69,10 +50,10 @@ const allTiles = new TileSet(ZOOM)
 for await (const inFile of getFiles('/Users/torsten/git/strava-activity-downloader/data')) {
     console.log('--i-->', inFile)
     allTiles.addCoords(await parseFile(inFile))
-    const tileClusters = tiles2clusters(allTiles)
-    if (tileClusters.maxCluster.getSize() > prevSize) {
+    const { maxCluster } = tiles2clusters(allTiles)
+    if (maxCluster.getSize() > prevSize) {
+        prevSize = maxCluster.getSize()
         const outFile = createFileName(inFile)
-        await writeFile(outFile, tileClusters)
-        prevSize = tileClusters.maxCluster.getSize()
+        await writeFile(outFile, allTiles)
     }
 }
