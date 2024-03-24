@@ -4,16 +4,16 @@ import { resolve } from 'path'
 import { readdir } from 'fs/promises'
 import fs from 'node:fs/promises'
 
-const port = 5555
+const PORT = 5555
 
 const app = express()
 app.use(cors())
 
-
 let fileIterator : AsyncGenerator<string, void, undefined>
 
-app.get('/init', async (req, res) => {
-    fileIterator = getFiles('/Users/torsten/git/view-every-tile/server/data') // TODO: Use relative path!
+app.get('/init/:zoom', async (req, res) => {
+    const path = process.cwd() + '/data/' + req.params.zoom
+    fileIterator = getFiles(path)
     res.sendStatus(204)
 })
 
@@ -37,17 +37,17 @@ app.get('/next', async (req, res) => {
 })
 
 async function* getFiles(dir: string): AsyncGenerator<string, void, undefined> {
-    const dirents = await readdir(dir, { withFileTypes: true });
+    const dirents = await readdir(dir, { withFileTypes: true })
     for (const dirent of dirents) {
-        const res = resolve(dir, dirent.name);
+        const res = resolve(dir, dirent.name)
         if (dirent.isDirectory()) {
-            yield* getFiles(res);
-        } else {
-            yield res;
+            yield* getFiles(res)
+        } else if (dirent.name.endsWith('gpx')) {
+            yield res
         }
     }
 }
 
-app.listen(port, () => {
-    console.log(`Tile server listening on port ${port}`)
+app.listen(PORT, () => {
+    console.log(`Tile server listening on port ${PORT}`)
 })

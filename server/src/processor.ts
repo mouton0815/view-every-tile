@@ -3,16 +3,16 @@ import fs from 'node:fs/promises'
 import GpxParser from 'gpxparser'
 import { Coords, TileClusters, tiles2clusters, TileSet } from 'tiles-math'
 
-const ZOOM = 14
+// TODO: Incremental files
 
 async function* getFiles(dir: string): AsyncGenerator<string, void, undefined> {
-    const dirents = await fs.readdir(dir, { withFileTypes: true });
+    const dirents = await fs.readdir(dir, { withFileTypes: true })
     for (const dirent of dirents) {
-        const res = resolve(dir, dirent.name);
+        const res = resolve(dir, dirent.name)
         if (dirent.isDirectory()) {
-            yield* getFiles(res);
-        } else {
-            yield res;
+            yield* getFiles(res)
+        } else if (dirent.name.endsWith('gpx')) {
+            yield res
         }
     }
 }
@@ -33,9 +33,9 @@ async function parseFile(file: string) : Promise<Array<Coords>> {
     }
 }
 
-function createFileName(inFilePath: string): string {
+function createFileName(inFilePath: string, zoom: number): string {
     const parts = inFilePath.split('/')
-    return process.cwd() + '/data/' + parts.toSpliced(0, parts.length - 3).join('/')
+    return process.cwd() + '/data/' + zoom + '/' + parts.toSpliced(0, parts.length - 3).join('/')
 }
 
 async function writeFile(outFilePath: string, tiles: TileSet) {
@@ -45,15 +45,23 @@ async function writeFile(outFilePath: string, tiles: TileSet) {
     console.log('--o-->', outFilePath)
 }
 
+const args = process.argv.slice(2) // Strip node and script paths
+if (args.length !== 2 || Number.isNaN(parseInt(args[1]))) {
+    console.error('Need path and zoom level as arguments')
+    process.exit(-1)
+}
+const path = args[0]
+const zoom = parseInt(args[1])
+
 let prevSize = 0
-const allTiles = new TileSet(ZOOM)
-for await (const inFile of getFiles('/Users/torsten/git/strava-activity-downloader/data')) {
+const allTiles = new TileSet(zoom)
+for await (const inFile of getFiles(path)) {
     console.log('--i-->', inFile)
     allTiles.addCoords(await parseFile(inFile))
     const { maxCluster } = tiles2clusters(allTiles)
     if (maxCluster.getSize() > prevSize) {
         prevSize = maxCluster.getSize()
-        const outFile = createFileName(inFile)
+        const outFile = createFileName(inFile, zoom)
         await writeFile(outFile, allTiles)
     }
 }
