@@ -55,13 +55,21 @@ const zoom = parseInt(args[1])
 
 let prevSize = 0
 const allTiles = new TileSet(zoom)
+let deltaTiles = new TileSet(zoom)
 for await (const inFile of getFiles(path)) {
     console.log('--i-->', inFile)
-    allTiles.addCoords(await parseFile(inFile))
+    const newTiles = new TileSet(zoom).addCoords(await parseFile(inFile))
+    for (const tile of newTiles) {
+        if (!allTiles.has(tile)) {
+            allTiles.addTile(tile)
+            deltaTiles.addTile(tile)
+        }
+    }
     const { maxCluster } = tiles2clusters(allTiles)
     if (maxCluster.getSize() > prevSize) {
         prevSize = maxCluster.getSize()
         const outFile = createFileName(inFile, zoom)
-        await writeFile(outFile, allTiles)
+        await writeFile(outFile, deltaTiles)
+        deltaTiles = new TileSet(zoom) // TODO: TileSet.clear ?
     }
 }

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { MapContainer, Polyline, Rectangle, TileLayer, useMap } from 'react-leaflet'
 import { cluster2boundaries, cluster2square, TileClusters, tiles2clusters, TileSet } from 'tiles-math'
-import { TileNo } from 'tiles-math/dist/types/TileNo'
 
 // Constants controlling the map view and tile generation
 const tileZoom = 14 // VeloViewer and others use zoom-level 14 tiles
@@ -57,6 +56,8 @@ const MyComponent = ({ clusters }: TileContainerProps) => {
     return null
 }
 
+const allTiles = new TileSet(tileZoom)
+
 export const App = () => {
     const [clusters, setClusters] = useState<TileClusters | null>(null)
 
@@ -64,14 +65,13 @@ export const App = () => {
         const timer = (ms: number) => new Promise(res => setTimeout(res, ms));
         (async function() {
             try {
-                let response = await fetch('http://localhost:5555/init')
+                let response = await fetch(`http://localhost:5555/init/${tileZoom}`)
                 if (!response.ok) {
                     return
                 }
                 while ((response = await fetch('http://localhost:5555/next')).ok) {
-                    const tiles : Array<TileNo> = await response.json()
-                    const tileSet = new TileSet(tileZoom).addTiles(tiles)
-                    const clusters = tiles2clusters(tileSet)
+                    allTiles.addTiles(await response.json())
+                    const clusters = tiles2clusters(allTiles)
                     setClusters(clusters)
                     await timer(addDelay)
                 }
