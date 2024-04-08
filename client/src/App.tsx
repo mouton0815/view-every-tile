@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { MapContainer, Polyline, Rectangle, TileLayer, useMap } from 'react-leaflet'
-import { cluster2boundaries, cluster2square, TileClusters, tiles2clusters, TileSet } from 'tiles-math'
+import { delta2clusters, cluster2boundaries, cluster2square, TileClusters, TileSet } from 'tiles-math'
 
 // Constants controlling the map view and tile generation
-const tileZoom = 14 // VeloViewer and others use zoom-level 14 tiles
+const tileZoom = 17 // VeloViewer and others use zoom-level 14 tiles
 const mapZoom = 9
 const addDelay = 500 // Delay between adding two random tiles
 
@@ -48,7 +48,7 @@ const TileContainer = ({ clusters }: TileContainerProps) => {
     )
 }
 
-const MyComponent = ({ clusters }: TileContainerProps) => {
+const MapBoundsControl = ({ clusters }: TileContainerProps) => {
     const mapBounds = clusters.maxCluster.boundingBox(0.5)
     if (mapBounds) {
         useMap().fitBounds(mapBounds.bounds())
@@ -56,7 +56,7 @@ const MyComponent = ({ clusters }: TileContainerProps) => {
     return null
 }
 
-const allTiles = new TileSet(tileZoom)
+let incrClusters : TileClusters | undefined = undefined
 
 export const App = () => {
     const [clusters, setClusters] = useState<TileClusters | null>(null)
@@ -70,9 +70,9 @@ export const App = () => {
                     return
                 }
                 while ((response = await fetch('http://localhost:5555/next')).ok) {
-                    allTiles.addTiles(await response.json())
-                    const clusters = tiles2clusters(allTiles)
-                    setClusters(clusters)
+                    const newTiles = new TileSet(tileZoom).addTiles(await response.json())
+                    incrClusters = delta2clusters(newTiles, incrClusters)
+                    setClusters(incrClusters)
                     await timer(addDelay)
                 }
             } catch (error) {
@@ -97,7 +97,7 @@ export const App = () => {
                 attribution='&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            <MyComponent clusters={clusters} />
+            <MapBoundsControl clusters={clusters} />
             <TileContainer clusters={clusters} />
         </MapContainer>
     )

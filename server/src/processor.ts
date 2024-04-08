@@ -1,7 +1,7 @@
 import { dirname, resolve } from 'path'
 import fs from 'node:fs/promises'
 import GpxParser from 'gpxparser'
-import { Coords, TileClusters, tiles2clusters, TileSet } from 'tiles-math'
+import { Coords, tiles2clusters, TileSet } from 'tiles-math'
 
 // TODO: Incremental files
 
