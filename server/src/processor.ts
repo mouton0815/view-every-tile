@@ -1,7 +1,7 @@
 import { dirname, resolve } from 'path'
 import fs from 'node:fs/promises'
 import GpxParser from 'gpxparser'
-import { Coords, tiles2clusters, TileSet } from 'tiles-math'
+import { Coords, TileClusters, tiles2clusters, TileSet } from 'tiles-math'
 
 async function* getFiles(dir: string): AsyncGenerator<string, void, undefined> {
     const dirents = await fs.readdir(dir, { withFileTypes: true })
@@ -52,20 +52,16 @@ const path = args[0]
 const zoom = parseInt(args[1])
 
 let prevSize = 0
+let clusters : TileClusters | undefined = undefined
 const allTiles = new TileSet(zoom)
 let deltaTiles = new TileSet(zoom)
 for await (const inFile of getFiles(path)) {
     // console.log('--i-->', inFile)
     const newTiles = new TileSet(zoom).addCoords(await parseFile(inFile))
-    for (const tile of newTiles) {
-        if (!allTiles.has(tile)) {
-            allTiles.addTile(tile)
-            deltaTiles.addTile(tile)
-        }
-    }
-    const { maxCluster } = tiles2clusters(allTiles) // TODO: Incremental clustering
-    if (maxCluster.getSize() > prevSize) {
-        prevSize = maxCluster.getSize()
+    deltaTiles.addTiles(allTiles.mergeDiff(newTiles))
+    clusters = tiles2clusters(newTiles, clusters)
+    if (clusters.maxCluster.getSize() > prevSize) {
+        prevSize = clusters.maxCluster.getSize()
         const outFile = createFileName(inFile, zoom)
         await writeFile(outFile, deltaTiles)
         deltaTiles = new TileSet(zoom) // TODO: TileSet.clear ?
