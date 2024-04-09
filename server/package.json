@@ -6,7 +6,9 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "start": "tsc && node dist/server.js"
+    "proc": "tsc && node dist/processor.js",
+    "serv": "tsc && node dist/server.js",
+    "prof": "tsc && node dist/profiler.js"
   },
   "repository": {
     "type": "git",
@@ -22,7 +24,7 @@
     "cors": "^2.8.5",
     "express": "^4.18.3",
     "gpxparser": "^3.0.8",
-    "tiles-math": "^1.3.0"
+    "tiles-math": "^1.4.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

@@ -3,8 +3,6 @@ import fs from 'node:fs/promises'
 import GpxParser from 'gpxparser'
 import { Coords, tiles2clusters, TileSet } from 'tiles-math'
 
-// TODO: Incremental files
-
 async function* getFiles(dir: string): AsyncGenerator<string, void, undefined> {
     const dirents = await fs.readdir(dir, { withFileTypes: true })
     for (const dirent of dirents) {
@@ -57,7 +55,7 @@ let prevSize = 0
 const allTiles = new TileSet(zoom)
 let deltaTiles = new TileSet(zoom)
 for await (const inFile of getFiles(path)) {
-    console.log('--i-->', inFile)
+    // console.log('--i-->', inFile)
     const newTiles = new TileSet(zoom).addCoords(await parseFile(inFile))
     for (const tile of newTiles) {
         if (!allTiles.has(tile)) {
@@ -65,7 +63,7 @@ for await (const inFile of getFiles(path)) {
             deltaTiles.addTile(tile)
         }
     }
-    const { maxCluster } = tiles2clusters(allTiles)
+    const { maxCluster } = tiles2clusters(allTiles) // TODO: Incremental clustering
     if (maxCluster.getSize() > prevSize) {
         prevSize = maxCluster.getSize()
         const outFile = createFileName(inFile, zoom)

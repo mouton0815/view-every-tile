@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { MapContainer, Polyline, Rectangle, TileLayer, useMap } from 'react-leaflet'
-import { delta2clusters, cluster2boundaries, cluster2square, TileClusters, TileSet } from 'tiles-math'
+import { cluster2boundaries, cluster2square, TileClusters, tiles2clusters, TileSet } from 'tiles-math'
 
 // Constants controlling the map view and tile generation
-const tileZoom = 17 // VeloViewer and others use zoom-level 14 tiles
+const tileZoom = 14 // VeloViewer and others use zoom-level 14 tiles
 const mapZoom = 9
 const addDelay = 500 // Delay between adding two random tiles
 
@@ -71,7 +71,7 @@ export const App = () => {
                 }
                 while ((response = await fetch('http://localhost:5555/next')).ok) {
                     const newTiles = new TileSet(tileZoom).addTiles(await response.json())
-                    incrClusters = delta2clusters(newTiles, incrClusters)
+                    incrClusters = tiles2clusters(newTiles, incrClusters)
                     setClusters(incrClusters)
                     await timer(addDelay)
                 }
