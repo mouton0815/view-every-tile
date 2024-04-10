@@ -1,7 +1,21 @@
 import { dirname, resolve } from 'path'
 import fs from 'node:fs/promises'
 import GpxParser from 'gpxparser'
-import { Coords, TileClusters, tiles2clusters, TileSet } from 'tiles-math'
+import { Coords, Tile, TileClusters, TileNo, tiles2clusters, TileSet } from 'tiles-math'
+
+type Track = Array<Coords>
+
+type InFileContent = {
+    name: string
+    time: Date
+    track: Track
+}
+
+type OutFileContent = InFileContent & {
+    tiles: Array<TileNo>
+}
+
+const toTileNo = ({ x, y }: Tile): TileNo => ({ x, y }) // Drop z field
 
 async function* getFiles(dir: string): AsyncGenerator<string, void, undefined> {
     const dirents = await fs.readdir(dir, { withFileTypes: true })
@@ -15,19 +29,23 @@ async function* getFiles(dir: string): AsyncGenerator<string, void, undefined> {
     }
 }
 
-async function parseFile(file: string) : Promise<Array<Coords>> {
+async function readFile(filePath: string) : Promise<InFileContent> {
     try {
-        const data = await fs.readFile(file);
+        const data = await fs.readFile(filePath);
         // @ts-ignore
         const gpx = new GpxParser()
         gpx.parse(data.toString())
-        if (!gpx.tracks || gpx.tracks.length !== 1 || !gpx.tracks[0].points) {
-            console.warn('No tracks array in file', file)
+        if (!gpx.tracks || gpx.tracks.length !== 1 || !gpx.tracks[0].points || gpx.tracks[0].points.length < 1) {
+            console.warn('No tracks array in file', filePath)
         } else {
-            return gpx.tracks[0].points.map(({lat, lon}) => ([lat, lon]))
+            const trk = gpx.tracks[0]
+            const name = trk.name
+            const time = trk.points[0].time
+            const track = trk.points.map(({lat, lon}) => ([lat, lon]))
+            return { name, time, track }
         }
     } catch (err) {
-        console.warn('Cannot read GPX file', file, err)
+        console.warn('Cannot read GPX file', filePath, err)
     }
 }
 
@@ -36,10 +54,9 @@ function createFileName(inFilePath: string, zoom: number): string {
     return process.cwd() + '/data/' + zoom + '/' + parts.toSpliced(0, parts.length - 3).join('/')
 }
 
-async function writeFile(outFilePath: string, tiles: TileSet) {
+async function writeFile(outFilePath: string, content: OutFileContent) {
     await fs.mkdir(dirname(outFilePath), { recursive: true })
-    const data = tiles.map(({ x, y }) => ({ x, y }))
-    await fs.writeFile(outFilePath, JSON.stringify(data))
+    await fs.writeFile(outFilePath, JSON.stringify(content))
     console.log('--o-->', outFilePath)
 }
 
@@ -55,15 +72,17 @@ let prevSize = 0
 let clusters : TileClusters | undefined = undefined
 const allTiles = new TileSet(zoom)
 let deltaTiles = new TileSet(zoom)
-for await (const inFile of getFiles(path)) {
-    // console.log('--i-->', inFile)
-    const newTiles = new TileSet(zoom).addCoords(await parseFile(inFile))
+for await (const inFilePath of getFiles(path)) {
+    // console.log('--i-->', inFilePath)
+    const { name, time, track } = await readFile(inFilePath)
+    const newTiles = new TileSet(zoom).addCoords(track)
     deltaTiles.addTiles(allTiles.mergeDiff(newTiles))
     clusters = tiles2clusters(newTiles, clusters)
     if (clusters.maxCluster.getSize() > prevSize) {
         prevSize = clusters.maxCluster.getSize()
-        const outFile = createFileName(inFile, zoom)
-        await writeFile(outFile, deltaTiles)
+        const tiles = deltaTiles.map(toTileNo)
+        const outFilePath = createFileName(inFilePath, zoom)
+        await writeFile(outFilePath, { name, time, track, tiles })
         deltaTiles = new TileSet(zoom) // TODO: TileSet.clear ?
     }
 }

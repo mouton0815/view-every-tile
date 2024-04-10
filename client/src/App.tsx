@@ -1,19 +1,33 @@
 import { useEffect, useState } from 'react'
 import { MapContainer, Polyline, Rectangle, TileLayer, useMap } from 'react-leaflet'
-import { cluster2boundaries, cluster2square, TileClusters, tiles2clusters, TileSet } from 'tiles-math'
+import { cluster2boundaries, cluster2square, Coords, TileClusters, TileNo, tiles2clusters, TileSet } from 'tiles-math'
 
 // Constants controlling the map view and tile generation
 const tileZoom = 14 // VeloViewer and others use zoom-level 14 tiles
 const mapZoom = 9
-const addDelay = 500 // Delay between adding two random tiles
+const addDelay = 2000 // Delay between adding two random tiles
 
-type TileContainerProps = {
+type RequestContent = {
+    name: string
+    time: Date
+    track: Array<Coords>
+    tiles: Array<TileNo>
+}
+
+type State = {
+    clusters: TileClusters
+    track: Array<Coords>
+}
+
+type TileContainerProps = State
+
+type MapBoundsControlProps = {
     clusters: TileClusters
 }
 
 // Displays detached tiles (red), minor clusters (purple), max cluster (blue), boundaries lines of
 // the max cluster (blue), and the centroid of the max cluster (orange).
-const TileContainer = ({ clusters }: TileContainerProps) => {
+const TileContainer = ({ clusters, track }: TileContainerProps) => {
     const { allTiles, detachedTiles, minorClusters, maxCluster } = clusters
     const maxSquare = cluster2square(allTiles).getCenterSquare()
     const boundaries = cluster2boundaries(maxCluster)
@@ -44,12 +58,13 @@ const TileContainer = ({ clusters }: TileContainerProps) => {
                     <Rectangle bounds={maxSquare.bounds()} pane={'markerPane'} pathOptions={{ fill: false, color: 'yellow', weight: 3, opacity: 1 }} />
                 }
             </>
+            <Polyline positions={track} pane={'markerPane'} pathOptions={{ color: 'red', weight: 2, opacity: 0.7 }} />
         </div>
     )
 }
 
-const MapBoundsControl = ({ clusters }: TileContainerProps) => {
-    const mapBounds = clusters.maxCluster.boundingBox(0.5)
+const MapBoundsControl = ({ clusters }: MapBoundsControlProps) => {
+    const mapBounds = clusters.maxCluster.boundingBox(1)
     if (mapBounds) {
         useMap().fitBounds(mapBounds.bounds())
     }
@@ -59,7 +74,7 @@ const MapBoundsControl = ({ clusters }: TileContainerProps) => {
 let incrClusters : TileClusters | undefined = undefined
 
 export const App = () => {
-    const [clusters, setClusters] = useState<TileClusters | null>(null)
+    const [state, setState] = useState<State | null>(null)
 
     useEffect(() => {
         const timer = (ms: number) => new Promise(res => setTimeout(res, ms));
@@ -70,9 +85,11 @@ export const App = () => {
                     return
                 }
                 while ((response = await fetch('http://localhost:5555/next')).ok) {
-                    const newTiles = new TileSet(tileZoom).addTiles(await response.json())
+                    const result : RequestContent = await response.json()
+                    const newTiles = new TileSet(tileZoom).addTiles(result.tiles)
+                    console.log('----->', result.time, result.name)
                     incrClusters = tiles2clusters(newTiles, incrClusters)
-                    setClusters(incrClusters)
+                    setState({ clusters: incrClusters, track: result.track })
                     await timer(addDelay)
                 }
             } catch (error) {
@@ -81,11 +98,11 @@ export const App = () => {
         })()
     }, [])
 
-    if (clusters === null) {
+    if (state === null) {
         return <b>Waiting for data from server...</b>
     }
 
-    const mapCenter = clusters.maxCluster.centroid()?.position()
+    const mapCenter = state.clusters.maxCluster.centroid()?.position()
     return (
         <MapContainer
             center={mapCenter}
@@ -97,8 +114,8 @@ export const App = () => {
                 attribution='&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            <MapBoundsControl clusters={clusters} />
-            <TileContainer clusters={clusters} />
+            <MapBoundsControl clusters={state.clusters} />
+            <TileContainer clusters={state.clusters} track={state.track} />
         </MapContainer>
     )
 }
