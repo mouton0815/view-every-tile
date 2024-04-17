@@ -31,7 +31,7 @@ app.get('/next', async (req, res) => {
     try {
         res.send(await fs.readFile(entry.value))
     } catch (err) {
-        console.warn('Cannot read GPX file', entry.value, err)
+        console.warn('Cannot read GPX file', entry.value, err) // TODO: It is not a GPX file!
         res.sendStatus(404)
     }
 })
