@@ -106,7 +106,6 @@ let snapshot = await readClustersFile(createClustersFileName(zoom))
 // const limit = snapshot ? 50 : 10
 let clusters = snapshot ? tiles2clusters(snapshot) : null
 let prevSize = clusters ? clusters.maxCluster.getSize() : 0
-const allTiles = snapshot ? snapshot.clone(true) : new TileSet(zoom) // TODO: Only needed because tiles2clusters does not reveal delta
 const deltaTiles = new TileSet(zoom)
 // let counter = 0
 for await (const inFilePath of getGPXFiles(gpxPath)) {
@@ -114,9 +113,9 @@ for await (const inFilePath of getGPXFiles(gpxPath)) {
     // console.log('--i-->', inFilePath)
     const { name, time, track } = await readGPXFile(inFilePath)
     const newTiles = new TileSet(zoom).addCoords(track)
-    deltaTiles.addTiles(allTiles.mergeDiff(newTiles))
     // console.log('--d-->', newTiles.getSize(), inFilePath)
     clusters = tiles2clusters(newTiles, clusters)
+    deltaTiles.addTiles(clusters.newTiles)
     // console.log('--x-->', clusters.maxCluster.getSize(), prevSize, clusters.allTiles.getSize(), clusters.detachedTiles.getSize())
     if (clusters.maxCluster.getSize() > prevSize) {
         prevSize = clusters.maxCluster.getSize()
