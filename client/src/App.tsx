@@ -5,7 +5,7 @@ import './App.css'
 
 // Constants controlling the map view and tile generation
 const tileZoom = 14 // VeloViewer and others use zoom-level 14 tiles
-const mapZoom = 9
+const mapZoom = 9 // TODO: Needed in presence of MapBoundsControl ?
 const addDelay = 2000 // Delay between adding two random tiles
 
 type RequestContent = {

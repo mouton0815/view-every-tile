@@ -1,18 +1,25 @@
 import { dirname, resolve } from 'path'
 import fs from 'node:fs/promises'
 import GpxParser from 'gpxparser'
-import { Coords, Tile, TileClusters, TileNo, tiles2clusters, TileSet } from 'tiles-math'
+import { Coords, Tile, TileNo, tiles2clusters, TileSet } from 'tiles-math'
 
 type Track = Array<Coords>
 
-type InFileContent = {
+type GPXFileContent = {
     name: string
     time: Date
     track: Track
 }
 
-type OutFileContent = InFileContent & {
-    tiles: Array<TileNo>
+type TilesArray = Array<TileNo>
+
+type TilesFileContent = GPXFileContent & {
+    tiles: TilesArray
+}
+
+type TileSetSerialized = {
+    zoom: number
+    tiles: TilesArray
 }
 
 const toTileNo = ({ x, y }: Tile): TileNo => ({ x, y }) // Drop z field
@@ -29,7 +36,7 @@ async function* getGPXFiles(dir: string): AsyncGenerator<string, void, undefined
     }
 }
 
-async function readGPXFile(filePath: string) : Promise<InFileContent> {
+async function readGPXFile(filePath: string) : Promise<GPXFileContent> {
     try {
         const data = await fs.readFile(filePath);
         // @ts-ignore
@@ -55,7 +62,7 @@ function createTilesFileName(inFilePath: string, zoom: number): string {
     return process.cwd() + '/data/' + zoom + '/' + parts.toSpliced(0, parts.length - 3).join('/')
 }
 
-async function writeTilesFile(outFilePath: string, content: OutFileContent) {
+async function writeTilesFile(outFilePath: string, content: TilesFileContent) {
     await fs.mkdir(dirname(outFilePath), { recursive: true })
     await fs.writeFile(outFilePath, JSON.stringify(content))
     console.log('--o-->', outFilePath)
@@ -68,8 +75,9 @@ function createClustersFileName(zoom: number): string {
 
 async function readClustersFile(filePath: string) : Promise<TileSet | null> {
     try {
-        const data = await fs.readFile(filePath)
-        return TileSet.fromJSON(data.toString())
+        const buffer = await fs.readFile(filePath)
+        const parsed: TileSetSerialized = JSON.parse(buffer.toString())
+        return new TileSet(parsed.zoom).addTiles(parsed.tiles)
     } catch (err) {
         console.info('Cannot read clusters file', filePath, '(this may be expected)')
         return null
@@ -77,8 +85,12 @@ async function readClustersFile(filePath: string) : Promise<TileSet | null> {
 }
 
 async function writeClustersFile(outFilePath: string, tiles: TileSet) {
+    const serialized : TileSetSerialized = {
+        zoom: tiles.getZoom(),
+        tiles: tiles.map(({ x, y }: Tile): TileNo => ({ x, y })) // Drop z field
+    }
     await fs.mkdir(dirname(outFilePath), { recursive: true })
-    await fs.writeFile(outFilePath, tiles.toJSON())
+    await fs.writeFile(outFilePath, JSON.stringify(serialized))
     console.log('--c-->', outFilePath)
 }
 
