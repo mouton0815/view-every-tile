@@ -61,10 +61,11 @@ async function readGPXFile(filePath: string) : Promise<GPXFileContent> {
     }
 }
 
-// TODO: File ending 'gpx' is wrong
-function createTilesFileName(inFilePath: string, zoom: number): string {
-    const parts = inFilePath.split('/')
-    return process.cwd() + '/data/' + zoom + '/' + parts.toSpliced(0, parts.length - 3).join('/')
+function createTilesFileName(gpxFilePath: string, zoom: number): string {
+    const parts = gpxFilePath.split('/')
+    parts.splice(0, parts.length - 3) // Only keep the last three path elements (year, month, filename)
+    parts[parts.length - 1] = parts[parts.length - 1].replace('.gpx', '.json')
+    return process.cwd() + '/data/' + zoom + '/' + parts.join('/')
 }
 
 async function writeTilesFile(outFilePath: string, content: TilesFileContent) {
@@ -114,15 +115,15 @@ let snapshot = await readSnapshotFile(createSnapshotFileName(zoom))
 let clusters = snapshot ? tiles2clusters(snapshot) : null
 let prevSize = clusters ? clusters.maxCluster.getSize() : 0
 const deltaTiles = new TileSet(zoom) // All tiles added since the latest increase of the max cluster
-for await (const inFilePath of getGPXFiles(path)) {
-    const { name, time, track } = await readGPXFile(inFilePath)
+for await (const gpxFilePath of getGPXFiles(path)) {
+    const { name, time, track } = await readGPXFile(gpxFilePath)
     const newTiles = new TileSet(zoom).addCoords(track)
     clusters = tiles2clusters(newTiles, clusters)
     deltaTiles.addTiles(clusters.newTiles)
     if (clusters.maxCluster.getSize() > prevSize) {
         prevSize = clusters.maxCluster.getSize()
         const tiles = deltaTiles.map(toTileNo)
-        const outFilePath = createTilesFileName(inFilePath, zoom)
+        const outFilePath = createTilesFileName(gpxFilePath, zoom)
         await writeTilesFile(outFilePath, { name, time, track, tiles })
         snapshot = clusters.allTiles.clone(true)
         deltaTiles.clear()

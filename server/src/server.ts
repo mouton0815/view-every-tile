@@ -31,7 +31,7 @@ app.get('/next', async (req, res) => {
     try {
         res.send(await fs.readFile(entry.value))
     } catch (err) {
-        console.warn('Cannot read GPX file', entry.value, err) // TODO: It is not a GPX file!
+        console.warn('Cannot read tiles file', entry.value, err)
         res.sendStatus(404)
     }
 })
@@ -42,7 +42,7 @@ async function* getFiles(dir: string): AsyncGenerator<string, void, undefined> {
         const res = resolve(dir, dirent.name)
         if (dirent.isDirectory()) {
             yield* getFiles(res)
-        } else if (dirent.name.endsWith('gpx')) {
+        } else if (dirent.name.endsWith('json')) {
             yield res
         }
     }
