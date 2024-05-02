@@ -22,6 +22,11 @@ type TileSetSerialized = {
     tiles: TilesArray
 }
 
+type CommandLineArgs = {
+    path: string
+    zoom: number
+}
+
 const toTileNo = ({ x, y }: Tile): TileNo => ({ x, y }) // Drop z field
 
 async function* getGPXFiles(dir: string): AsyncGenerator<string, void, undefined> {
@@ -69,11 +74,11 @@ async function writeTilesFile(outFilePath: string, content: TilesFileContent) {
 }
 
 
-function createClustersFileName(zoom: number): string {
+function createSnapshotFileName(zoom: number): string {
     return process.cwd() + '/data/' + zoom + '/tiles.json'
 }
 
-async function readClustersFile(filePath: string) : Promise<TileSet | null> {
+async function readSnapshotFile(filePath: string) : Promise<TileSet | null> {
     try {
         const buffer = await fs.readFile(filePath)
         const parsed: TileSetSerialized = JSON.parse(buffer.toString())
@@ -84,7 +89,7 @@ async function readClustersFile(filePath: string) : Promise<TileSet | null> {
     }
 }
 
-async function writeClustersFile(outFilePath: string, tiles: TileSet) {
+async function writeSnapshotFile(outFilePath: string, tiles: TileSet) {
     const serialized : TileSetSerialized = {
         zoom: tiles.getZoom(),
         tiles: tiles.map(({ x, y }: Tile): TileNo => ({ x, y })) // Drop z field
@@ -94,29 +99,26 @@ async function writeClustersFile(outFilePath: string, tiles: TileSet) {
     console.log('--c-->', outFilePath)
 }
 
-const args = process.argv.slice(2) // Strip node and script paths
-if (args.length !== 2 || Number.isNaN(parseInt(args[1]))) {
-    console.error('Need <data_path> and <zoom_level> as arguments')
-    process.exit(-1)
+function parseCommandLine(): CommandLineArgs {
+    const args = process.argv.slice(2) // Strip node and script paths
+    if (args.length !== 2 || Number.isNaN(parseInt(args[1]))) {
+        console.error('Need <data_path> and <zoom_level> as arguments')
+        process.exit(-1)
+    }
+    return { path: args[0], zoom: parseInt(args[1]) }
 }
-const gpxPath = args[0]
-const zoom = parseInt(args[1])
 
-let snapshot = await readClustersFile(createClustersFileName(zoom))
-// const limit = snapshot ? 50 : 10
+const { path, zoom } = parseCommandLine()
+
+let snapshot = await readSnapshotFile(createSnapshotFileName(zoom))
 let clusters = snapshot ? tiles2clusters(snapshot) : null
 let prevSize = clusters ? clusters.maxCluster.getSize() : 0
-const deltaTiles = new TileSet(zoom)
-// let counter = 0
-for await (const inFilePath of getGPXFiles(gpxPath)) {
-    // if (++counter > limit) break
-    // console.log('--i-->', inFilePath)
+const deltaTiles = new TileSet(zoom) // All tiles added since the latest increase of the max cluster
+for await (const inFilePath of getGPXFiles(path)) {
     const { name, time, track } = await readGPXFile(inFilePath)
     const newTiles = new TileSet(zoom).addCoords(track)
-    // console.log('--d-->', newTiles.getSize(), inFilePath)
     clusters = tiles2clusters(newTiles, clusters)
     deltaTiles.addTiles(clusters.newTiles)
-    // console.log('--x-->', clusters.maxCluster.getSize(), prevSize, clusters.allTiles.getSize(), clusters.detachedTiles.getSize())
     if (clusters.maxCluster.getSize() > prevSize) {
         prevSize = clusters.maxCluster.getSize()
         const tiles = deltaTiles.map(toTileNo)
@@ -127,7 +129,8 @@ for await (const inFilePath of getGPXFiles(gpxPath)) {
     }
 }
 
+// Persist snapshot in the data folder
 if (snapshot) {
-    const outFilePath = createClustersFileName(zoom)
-    await writeClustersFile(outFilePath, snapshot)
+    const outFilePath = createSnapshotFileName(zoom)
+    await writeSnapshotFile(outFilePath, snapshot)
 }
