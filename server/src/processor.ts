@@ -13,7 +13,7 @@ type GPXFileContent = {
 
 type TilesArray = Array<TileNo>
 
-type TilesFileContent = GPXFileContent & {
+type DeltaFileContent = GPXFileContent & {
     tiles: TilesArray
 }
 
@@ -29,6 +29,7 @@ type CommandLineArgs = {
 
 const toTileNo = ({ x, y }: Tile): TileNo => ({ x, y }) // Drop z field
 
+// Iteratively and recursively returns all GPX files of the given directory
 async function* getGPXFiles(dir: string): AsyncGenerator<string, void, undefined> {
     const dirents = await fs.readdir(dir, { withFileTypes: true })
     for (const dirent of dirents) {
@@ -61,25 +62,25 @@ async function readGPXFile(filePath: string) : Promise<GPXFileContent> {
     }
 }
 
-function createTilesFileName(gpxFilePath: string, zoom: number): string {
+function createDeltaFileName(gpxFilePath: string, zoom: number): string {
     const parts = gpxFilePath.split('/')
     parts.splice(0, parts.length - 3) // Only keep the last three path elements (year, month, filename)
     parts[parts.length - 1] = parts[parts.length - 1].replace('.gpx', '.json')
     return process.cwd() + '/data/' + zoom + '/' + parts.join('/')
 }
 
-async function writeTilesFile(outFilePath: string, content: TilesFileContent) {
+async function writeDeltaFile(outFilePath: string, content: DeltaFileContent) {
     await fs.mkdir(dirname(outFilePath), { recursive: true })
     await fs.writeFile(outFilePath, JSON.stringify(content))
     console.log('--o-->', outFilePath)
 }
 
 
-function createSnapshotFileName(zoom: number): string {
+function createTilesFileName(zoom: number): string {
     return process.cwd() + '/data/' + zoom + '/tiles.json'
 }
 
-async function readSnapshotFile(filePath: string) : Promise<TileSet | null> {
+async function readTilesFile(filePath: string) : Promise<TileSet | null> {
     try {
         const buffer = await fs.readFile(filePath)
         const parsed: TileSetSerialized = JSON.parse(buffer.toString())
@@ -90,7 +91,7 @@ async function readSnapshotFile(filePath: string) : Promise<TileSet | null> {
     }
 }
 
-async function writeSnapshotFile(outFilePath: string, tiles: TileSet) {
+async function writeTilesFile(outFilePath: string, tiles: TileSet) {
     const serialized : TileSetSerialized = {
         zoom: tiles.getZoom(),
         tiles: tiles.map(({ x, y }: Tile): TileNo => ({ x, y })) // Drop z field
@@ -109,10 +110,14 @@ function parseCommandLine(): CommandLineArgs {
     return { path: args[0], zoom: parseInt(args[1]) }
 }
 
+//
+// Main block starts here
+//
 const { path, zoom } = parseCommandLine()
 
-let snapshot = await readSnapshotFile(createSnapshotFileName(zoom))
-let clusters = snapshot ? tiles2clusters(snapshot) : null
+// The tiles file contains the list of all distinct tiles covered by the tracks processed so far
+let allTiles = await readTilesFile(createTilesFileName(zoom))
+let clusters = allTiles ? tiles2clusters(allTiles) : null
 let prevSize = clusters ? clusters.maxCluster.getSize() : 0
 const deltaTiles = new TileSet(zoom) // All tiles added since the latest increase of the max cluster
 for await (const gpxFilePath of getGPXFiles(path)) {
@@ -120,18 +125,18 @@ for await (const gpxFilePath of getGPXFiles(path)) {
     const newTiles = new TileSet(zoom).addCoords(track)
     clusters = tiles2clusters(newTiles, clusters)
     deltaTiles.addTiles(clusters.newTiles)
-    if (clusters.maxCluster.getSize() > prevSize) {
+    if (clusters.maxCluster.getSize() > prevSize) { // Create a new delta file only if the cluster size increased
         prevSize = clusters.maxCluster.getSize()
-        const tiles = deltaTiles.map(toTileNo)
-        const outFilePath = createTilesFileName(gpxFilePath, zoom)
-        await writeTilesFile(outFilePath, { name, time, track, tiles })
-        snapshot = clusters.allTiles.clone(true)
+        const tiles = deltaTiles.map(toTileNo) // Store all tiles added since the latest max-cluster increase
+        const outFilePath = createDeltaFileName(gpxFilePath, zoom)
+        await writeDeltaFile(outFilePath, { name, time, track, tiles })
+        allTiles = clusters.allTiles.clone(true)
         deltaTiles.clear()
     }
 }
 
-// Persist snapshot in the data folder
-if (snapshot) {
-    const outFilePath = createSnapshotFileName(zoom)
-    await writeSnapshotFile(outFilePath, snapshot)
+// Persist the list of all tiles in the data folder
+if (allTiles) {
+    const outFilePath = createTilesFileName(zoom)
+    await writeTilesFile(outFilePath, allTiles)
 }
