@@ -5,10 +5,9 @@
   "main": "src/server.ts",
   "type": "module",
   "scripts": {
-    "build": "tsc",
-    "proc": "tsc && node dist/processor.js",
-    "serv": "tsc && node dist/server.js",
-    "prof": "tsc && node dist/profiler.js"
+    "proc": "tsx src/processor.js",
+    "serv": "tsx src/server.js",
+    "prof": "tsx src/profiler.js"
   },
   "repository": {
     "type": "git",
